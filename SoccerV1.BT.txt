@@ -1,0 +1,26 @@
+tree("Root")
+	tree("version1")
+
+tree("version1")
+    fallback
+        sequence
+            IsGoalie
+            tree("Defend")
+        sequence
+            ClosestToBall
+            tree("ChaseAndScore")
+        RamEnemyGoalie
+
+tree("Defend")
+    fallback
+        sequence
+            AtGoal
+            TakeDefenciveStance
+        GoToOurGoal
+
+tree("ChaseAndScore")
+    fallback
+        sequence
+            HaveBall
+            Dribble
+        InterceptBall

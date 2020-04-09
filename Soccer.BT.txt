@@ -1,0 +1,19 @@
+tree("Root")
+	tree("version1")
+
+tree("version1")
+    fallback
+        sequence
+            IsGoalie
+            Defend
+        sequence
+            IsChaser
+            tree("Chaser")
+        Defend
+
+tree("Chaser")
+    fallback
+        sequence
+            IsBallCloserThan 10.0
+            Dribble 
+        InterceptBall
