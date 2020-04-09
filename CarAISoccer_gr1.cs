@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using UnityEngine;
 using System;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Runtime.Remoting.Channels;
 using Panda;
 using Scrips;
+using Unity.Collections;
 using UnityEditor;
+using UnityEngine.Analytics;
 using XNode.Examples.MathNodes;
 
 namespace UnityStandardAssets.Vehicles.Car
@@ -22,7 +25,6 @@ namespace UnityStandardAssets.Vehicles.Car
         public string friend_tag;
         public GameObject[] enemies;
         public string enemy_tag;
-        private string myName;
 
         public GameObject own_goal;
         public GameObject other_goal;
@@ -33,12 +35,20 @@ namespace UnityStandardAssets.Vehicles.Car
         //Team Members
         private GameObject goalie;
         private GoalieController goalieController;
+        //private GameObject ballChaser;
+        private GoalieController ballChaserController;
+        private List<GameObject> chasers;
+        //private List<GoalieController> chaserControllers;
+
+        //Goalie parameters
+        private readonly float _defRadius = 6f; //Must be between above bounds
+        private float _maxDistanceToGoalGoalie;
+        private float _minDistanceToGoalGoalie;
+        //private float allowed_def_pos_err = 0.5f;
+        private Vector3 _optimalDefPos;
         
-        //Team parameters
-        private float max_distance_to_goal_goalie = 7f;
-        private float min_distance_to_goal_goalie = 5f;
-        private float def_radius = 6f; //Must be between above bounds
-        private Vector3 optimal_def_pos;
+        //Chaser parameters
+        private float _dribblingDistance = 5f;
 
         private void Start()
         {
@@ -56,18 +66,25 @@ namespace UnityStandardAssets.Vehicles.Car
                 enemy_tag = "Blue";
 
             ball = GameObject.FindGameObjectWithTag("Ball");
-            
-            myName = gameObject.name;
+
             friends = GameObject.FindGameObjectsWithTag(friend_tag);
             enemies = GameObject.FindGameObjectsWithTag(enemy_tag);
 
             goalie = friends[0];
             goalieController = new GoalieController(goalie);
+            _maxDistanceToGoalGoalie = _defRadius + 2f;
+            _minDistanceToGoalGoalie = _defRadius - 2f;
 
-            // Plan your path here
-            // ...
+            foreach (var teamMate in friends)
+            {
+                if (isGoalie(teamMate))
+                    continue;
+
+                chasers.Add(teamMate);
+                //chaserControllers.Add(new GoalieController(teamMate));
+            }
+            ballChaserController = new GoalieController(gameObject);
         }
-
 
         private void FixedUpdate()
         {
@@ -91,7 +108,7 @@ namespace UnityStandardAssets.Vehicles.Car
             //Draw optimal defencive position
 
             Gizmos.color = Color.cyan;
-            Gizmos.DrawSphere(optimal_def_pos, 3);
+            Gizmos.DrawSphere(_optimalDefPos, 3);
         }
 
         private void Update()
@@ -107,7 +124,7 @@ namespace UnityStandardAssets.Vehicles.Car
         [Task]
         bool IsGoalie()
         {
-            if (friends[0].name.Equals(gameObject.name))
+            if (friends[0].name.Equals(name))
             {
                 return true;
             }
@@ -127,15 +144,20 @@ namespace UnityStandardAssets.Vehicles.Car
 
         private bool withinGoalMargin(float distance_to_goal)
         {
-            return max_distance_to_goal_goalie > distance_to_goal && min_distance_to_goal_goalie < distance_to_goal;
+            return _maxDistanceToGoalGoalie > distance_to_goal && _minDistanceToGoalGoalie < distance_to_goal;
         }
 
         [Task]
         void TakeDefenciveStance()
         {
-            optimal_def_pos = calculateOptimalDefPos();
-            Move move = goalieController.moveToPosition(optimal_def_pos);
-            m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);
+            _optimalDefPos = calculateOptimalDefPos();
+            goToDefencePos();
+            
+            //Vector3 goalie_pos = transform.position;
+            /*if (allowed_def_pos_err < (optimal_def_pos - transform.position).magnitude)
+            {
+                goToDefencePos();
+            }*/
         }
 
         private Vector3 calculateOptimalDefPos()
@@ -144,14 +166,21 @@ namespace UnityStandardAssets.Vehicles.Car
             Vector3 goal_pos = own_goal.transform.position;
             Vector3 attack_vector = ball_pos - goal_pos;
             Vector3 unit_attack_vector = attack_vector / attack_vector.magnitude;
-            Vector3 final_attack_vector = unit_attack_vector * def_radius;
+            Vector3 final_attack_vector = unit_attack_vector * _defRadius;
             return final_attack_vector + goal_pos;
         }
 
         [Task]
         void GoToOurGoal()
         {
-            
+            _optimalDefPos = calculateOptimalDefPos();
+            goToDefencePos();
+        }
+
+        private void goToDefencePos()
+        {
+            Move move = goalieController.moveToPosition(_optimalDefPos);
+            m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);
         }
         
         //***************************************************************************
@@ -160,25 +189,58 @@ namespace UnityStandardAssets.Vehicles.Car
         [Task]
         bool ClosestToBall()
         {
-            return true;
+            GameObject closestPlayer = findClosestCar(chasers);
+
+            return closestPlayer.name == name;
+        }
+        
+        private GameObject findClosestCar(List<GameObject> players)
+        {
+            GameObject closestPlayer = null;
+            float shortestDistance = float.PositiveInfinity;
+            foreach (var teamMate in players)
+            {
+                float distanceToBall = this.distanceToBall(teamMate);
+                if (shortestDistance > distanceToBall)
+                {
+                    closestPlayer = teamMate;
+                    shortestDistance = distanceToBall;
+                }
+            }
+
+            return closestPlayer;
+        }
+
+        private bool isGoalie(GameObject teamMate)
+        {
+            return teamMate.name == friends[0].name;
         }
 
         [Task]
-        bool HaveBall(float distanceToBall)
+        bool HaveBall()
         {
-            return false;
+            return _dribblingDistance > distanceToBall(gameObject);
+        }
+
+        private float distanceToBall(GameObject teamMate)
+        {
+            return (teamMate.transform.position - ball.transform.position).magnitude;
         }
 
         [Task]
         void Dribble()
         {
-            
+            Vector3 enemyGoalPos = other_goal.transform.position;
+            Move move = ballChaserController.moveToPosition(enemyGoalPos);
+            m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);
         }
 
         [Task]
         void InterceptBall()
         {
-            
+            Vector3 ballPos = ball.transform.position;
+            Move move = ballChaserController.moveToPosition(ballPos);
+            m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);
         }
         
         //***************************************************************************
@@ -187,7 +249,25 @@ namespace UnityStandardAssets.Vehicles.Car
         [Task]
         void RamEnemyGoalie()
         {
-            
+            GameObject closestEnemy = null;
+            float shortestDistance = float.PositiveInfinity;
+            foreach (var enemy in enemies)
+            {
+                float distanceToEnemy = this.distanceToEnemy(enemy);
+                if (shortestDistance > distanceToEnemy)
+                {
+                    closestEnemy = enemy;
+                    shortestDistance = distanceToEnemy;
+                }
+            }
+
+            Move move = ballChaserController.moveToPosition(closestEnemy.transform.position);
+            m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);
+        }
+        
+        private float distanceToEnemy(GameObject enemy)
+        {
+            return (transform.position - enemy.transform.position).magnitude;
         }
     }
 }

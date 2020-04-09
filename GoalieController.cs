@@ -10,6 +10,7 @@ namespace Scrips
         //Goalie stays at the goal for the entire game and does turn around 180 degrees, simply reverses and reverses controls.
         private GameObject goalie;
         private bool reversing;
+        private float goalRadius = 2f;
 
         public GoalieController(GameObject goalie)
         {
@@ -18,14 +19,21 @@ namespace Scrips
 
         public Move moveToPosition(Vector3 guard_pos)
         {
-            CarController m_Car = goalie.GetComponent<CarController>();
             Vector3 current_pos = goalie.transform.position;
             Vector3 dir = goalie.transform.forward;
             Vector3 right = goalie.transform.forward;
             check_Should_Reverse(current_pos, guard_pos, dir);
             float steer = steer_dir(current_pos, right, guard_pos);
             float accel = acceleration();
-            return new Move(steer, accel, accel, 0);
+            float handbrake = 0;
+            if ((guard_pos - current_pos).magnitude < goalRadius)
+            {
+                steer = 0;
+                accel = 0;
+                handbrake = 1;
+            }
+
+                return new Move(steer, accel, accel, handbrake);
         }
         
         private void check_Should_Reverse(Vector3 currentPos, Vector3 goalPos, Vector3 carHeading)
