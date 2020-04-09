@@ -2,8 +2,11 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System;
+using System.Runtime.InteropServices.WindowsRuntime;
 using Panda;
+using Scrips;
 using UnityEditor;
+using XNode.Examples.MathNodes;
 
 namespace UnityStandardAssets.Vehicles.Car
 {
@@ -26,6 +29,16 @@ namespace UnityStandardAssets.Vehicles.Car
         public GameObject ball;
 
         private PandaBehaviour pb;
+        
+        //Team Members
+        private GameObject goalie;
+        private GoalieController goalieController;
+        
+        //Team parameters
+        private float max_distance_to_goal_goalie = 7f;
+        private float min_distance_to_goal_goalie = 5f;
+        private float def_radius = 6f; //Must be between above bounds
+        private Vector3 optimal_def_pos;
 
         private void Start()
         {
@@ -42,14 +55,15 @@ namespace UnityStandardAssets.Vehicles.Car
             else
                 enemy_tag = "Blue";
 
+            ball = GameObject.FindGameObjectWithTag("Ball");
+            
+            myName = gameObject.name;
             friends = GameObject.FindGameObjectsWithTag(friend_tag);
             enemies = GameObject.FindGameObjectsWithTag(enemy_tag);
 
-            myName = gameObject.name;
+            goalie = friends[0];
+            goalieController = new GoalieController(goalie);
 
-            ball = GameObject.FindGameObjectWithTag("Ball");
-
-            
             // Plan your path here
             // ...
         }
@@ -62,16 +76,22 @@ namespace UnityStandardAssets.Vehicles.Car
 
         private void OnDrawGizmos()
         {
+            //Assign team color
             if (friend_tag == "Blue")
             {
                 Gizmos.color = Color.blue;
-                Gizmos.DrawSphere(transform.position, 5);
+                Gizmos.DrawSphere(transform.position, 2);
             }
             else
             {
                 Gizmos.color = Color.red;
-                Gizmos.DrawSphere(transform.position, 5);
+                Gizmos.DrawSphere(transform.position, 2);
             }
+            
+            //Draw optimal defencive position
+
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawSphere(optimal_def_pos, 3);
         }
 
         private void Update()
@@ -98,13 +118,34 @@ namespace UnityStandardAssets.Vehicles.Car
         [Task]
         bool AtGoal()
         {
-            return false;
+            Vector3 goal_pos = own_goal.transform.position;
+            Vector3 goalie_pos = transform.position;
+            float distance_to_goal = (goal_pos - goalie_pos).magnitude;
+
+            return withinGoalMargin(distance_to_goal);
+        }
+
+        private bool withinGoalMargin(float distance_to_goal)
+        {
+            return max_distance_to_goal_goalie > distance_to_goal && min_distance_to_goal_goalie < distance_to_goal;
         }
 
         [Task]
         void TakeDefenciveStance()
         {
-            
+            optimal_def_pos = calculateOptimalDefPos();
+            Move move = goalieController.moveToPosition(optimal_def_pos);
+            m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);
+        }
+
+        private Vector3 calculateOptimalDefPos()
+        {
+            Vector3 ball_pos = ball.transform.position;
+            Vector3 goal_pos = own_goal.transform.position;
+            Vector3 attack_vector = ball_pos - goal_pos;
+            Vector3 unit_attack_vector = attack_vector / attack_vector.magnitude;
+            Vector3 final_attack_vector = unit_attack_vector * def_radius;
+            return final_attack_vector + goal_pos;
         }
 
         [Task]
