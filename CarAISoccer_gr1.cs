@@ -30,14 +30,14 @@ namespace UnityStandardAssets.Vehicles.Car
         public GameObject other_goal;
         public GameObject ball;
 
-        private PandaBehaviour pb;
+        PandaBehaviour pb;
         
         //Team Members
         private GameObject goalie;
-        private GoalieController goalieController;
+        private Navigator goalieController;
         //private GameObject ballChaser;
-        private GoalieController ballChaserController;
-        private List<GameObject> chasers;
+        private Navigator ballChaserController;
+        private List<GameObject> chasers = new List<GameObject>();
         //private List<GoalieController> chaserControllers;
 
         //Goalie parameters
@@ -70,8 +70,13 @@ namespace UnityStandardAssets.Vehicles.Car
             friends = GameObject.FindGameObjectsWithTag(friend_tag);
             enemies = GameObject.FindGameObjectsWithTag(enemy_tag);
 
+            Debug.LogFormat("Friends {0}", friends.Length);
+            Debug.LogFormat("Enemies {0}", enemies.Length);
+
+            //Debug.Log(friends[1]);
+
             goalie = friends[0];
-            goalieController = new GoalieController(goalie);
+            goalieController = new Navigator(goalie);
             _maxDistanceToGoalGoalie = _defRadius + 2f;
             _minDistanceToGoalGoalie = _defRadius - 2f;
 
@@ -79,11 +84,10 @@ namespace UnityStandardAssets.Vehicles.Car
             {
                 if (isGoalie(teamMate))
                     continue;
-
                 chasers.Add(teamMate);
                 //chaserControllers.Add(new GoalieController(teamMate));
             }
-            ballChaserController = new GoalieController(gameObject);
+            ballChaserController = new Navigator(gameObject);
         }
 
         private void FixedUpdate()
@@ -124,12 +128,7 @@ namespace UnityStandardAssets.Vehicles.Car
         [Task]
         bool IsGoalie()
         {
-            if (friends[0].name.Equals(name))
-            {
-                return true;
-            }
-
-            return false;
+            return goalie.name == gameObject.name;
         }
 
         [Task]
@@ -170,12 +169,12 @@ namespace UnityStandardAssets.Vehicles.Car
             return final_attack_vector + goal_pos;
         }
 
-        [Task]
+        /*[Task]
         void GoToOurGoal()
         {
-            _optimalDefPos = calculateOptimalDefPos();
-            goToDefencePos();
-        }
+            //_optimalDefPos = calculateOptimalDefPos();
+            //goToDefencePos();
+        }*/
 
         private void goToDefencePos()
         {
@@ -190,19 +189,19 @@ namespace UnityStandardAssets.Vehicles.Car
         bool ClosestToBall()
         {
             GameObject closestPlayer = findClosestCar(chasers);
-
-            return closestPlayer.name == name;
+            return closestPlayer.name == gameObject.name;
         }
         
         private GameObject findClosestCar(List<GameObject> players)
         {
-            GameObject closestPlayer = null;
+            GameObject closestPlayer = gameObject;
             float shortestDistance = float.PositiveInfinity;
             foreach (var teamMate in players)
             {
                 float distanceToBall = this.distanceToBall(teamMate);
                 if (shortestDistance > distanceToBall)
                 {
+                    Debug.Log("Found shorter distance");
                     closestPlayer = teamMate;
                     shortestDistance = distanceToBall;
                 }
@@ -249,7 +248,7 @@ namespace UnityStandardAssets.Vehicles.Car
         [Task]
         void RamEnemyGoalie()
         {
-            GameObject closestEnemy = null;
+            GameObject closestEnemy = enemies[0];
             float shortestDistance = float.PositiveInfinity;
             foreach (var enemy in enemies)
             {

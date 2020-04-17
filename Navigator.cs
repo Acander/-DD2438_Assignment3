@@ -5,23 +5,23 @@ using XNode.Examples.MathNodes;
 
 namespace Scrips
 {
-    public class GoalieController
+    public class Navigator
     {
         //Goalie stays at the goal for the entire game and does turn around 180 degrees, simply reverses and reverses controls.
-        private GameObject goalie;
+        private GameObject car;
         private bool reversing;
         private float goalRadius = 2f;
 
-        public GoalieController(GameObject goalie)
+        public Navigator(GameObject car)
         {
-            this.goalie = goalie;
+            this.car = car;
         }
 
         public Move moveToPosition(Vector3 guard_pos)
         {
-            Vector3 current_pos = goalie.transform.position;
-            Vector3 dir = goalie.transform.forward;
-            Vector3 right = goalie.transform.forward;
+            Vector3 current_pos = car.transform.position;
+            Vector3 dir = car.transform.forward;
+            Vector3 right = car.transform.right;
             check_Should_Reverse(current_pos, guard_pos, dir);
             float steer = steer_dir(current_pos, right, guard_pos);
             float accel = acceleration();
