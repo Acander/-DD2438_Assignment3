@@ -1,4 +1,7 @@
-﻿using Panda.Examples.Move;
+﻿using System.Diagnostics;
+using System.Runtime.Remoting.Channels;
+using Panda.Examples.Move;
+using UnityEditor;
 using UnityEngine;
 using UnityStandardAssets.Vehicles.Car;
 using XNode.Examples.MathNodes;
@@ -10,7 +13,9 @@ namespace Scrips
         //Goalie stays at the goal for the entire game and does turn around 180 degrees, simply reverses and reverses controls.
         private GameObject car;
         private bool reversing;
-        private float goalRadius = 2f;
+        public bool crash;
+        //private float goalRadius = 2f;
+        public Stopwatch stopwatch = new Stopwatch();
 
         public Navigator(GameObject car)
         {
@@ -19,6 +24,29 @@ namespace Scrips
 
         public Move moveToPosition(Vector3 guard_pos)
         {
+            if (crash)
+            {    
+                /*Vector3 current_pos = car.transform.position;
+                Vector3 dir = car.transform.forward;
+                check_Should_Reverse(current_pos, guard_pos, dir);*/
+                if (stopwatch.ElapsedMilliseconds < 2000)
+                {
+                    Move move = followGoal(guard_pos);
+                    move.throttle *= -1;
+                    move.footBrake *= -1;
+                    return move;
+                }
+                crash = false;
+                stopwatch.Stop();
+                stopwatch.Reset();
+            }
+
+            return followGoal(guard_pos);
+
+        }
+
+        private Move followGoal(Vector3 guard_pos)
+        {
             Vector3 current_pos = car.transform.position;
             Vector3 dir = car.transform.forward;
             Vector3 right = car.transform.right;
@@ -26,14 +54,31 @@ namespace Scrips
             float steer = steer_dir(current_pos, right, guard_pos);
             float accel = acceleration();
             float handbrake = 0;
-            if ((guard_pos - current_pos).magnitude < goalRadius)
+            /*if ((guard_pos - current_pos).magnitude < goalRadius)
             {
                 steer = 0;
                 accel = 0;
                 handbrake = 1;
-            }
+            }*/
+            steer = variateSteering(dir, guard_pos, current_pos, steer);
+            return new Move(steer, accel, accel, handbrake);
+        }
 
-                return new Move(steer, accel, accel, handbrake);
+        private float variateSteering(Vector3 dir, Vector3 guard_pos, Vector3 current_pos, float steer)
+        {
+            Vector3 between = guard_pos - current_pos;
+            if (reversing)
+            {
+                dir *= -1;
+            }
+            float angle = Vector3.Angle(dir, between);
+            
+            angle *= angle > 0f ? 1f : -1f;
+            float maxAngle = 90f;
+            float turningForce = angle / maxAngle;
+            steer *= turningForce;
+            return steer;
+
         }
         
         private void check_Should_Reverse(Vector3 currentPos, Vector3 goalPos, Vector3 carHeading)
@@ -67,6 +112,23 @@ namespace Scrips
             }
 
             return 1;
+        }
+
+        private Move crashRoutine()
+        {
+            if (reversing)
+            {
+                return new Move(0, 1, 0, 0);
+            }
+            
+            return new Move(0, 0, -1, 0);
+        }
+
+        public void setToCrash()
+        {
+            stopwatch.Reset();
+            stopwatch.Start();
+            crash = true;
         }
         
         

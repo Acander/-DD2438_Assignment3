@@ -34,14 +34,15 @@ namespace UnityStandardAssets.Vehicles.Car
         
         //Team Members
         private GameObject goalie;
-        private Navigator goalieController;
+        //private Navigator goalieController;
         //private GameObject ballChaser;
-        private Navigator ballChaserController;
+        //private Navigator ballChaserController;
         private List<GameObject> chasers = new List<GameObject>();
         //private List<GoalieController> chaserControllers;
+        private Navigator navigator;
 
         //Goalie parameters
-        private readonly float _defRadius = 6f; //Must be between above bounds
+        private readonly float _defRadius = 15f; //Must be between above bounds
         private float _maxDistanceToGoalGoalie;
         private float _minDistanceToGoalGoalie;
         //private float allowed_def_pos_err = 0.5f;
@@ -70,13 +71,13 @@ namespace UnityStandardAssets.Vehicles.Car
             friends = GameObject.FindGameObjectsWithTag(friend_tag);
             enemies = GameObject.FindGameObjectsWithTag(enemy_tag);
 
-            Debug.LogFormat("Friends {0}", friends.Length);
-            Debug.LogFormat("Enemies {0}", enemies.Length);
+            //Debug.LogFormat("Friends {0}", friends.Length);
+            //Debug.LogFormat("Enemies {0}", enemies.Length);
 
             //Debug.Log(friends[1]);
 
             goalie = friends[0];
-            goalieController = new Navigator(goalie);
+            //goalieController = new Navigator(goalie);
             _maxDistanceToGoalGoalie = _defRadius + 2f;
             _minDistanceToGoalGoalie = _defRadius - 2f;
 
@@ -87,7 +88,8 @@ namespace UnityStandardAssets.Vehicles.Car
                 chasers.Add(teamMate);
                 //chaserControllers.Add(new GoalieController(teamMate));
             }
-            ballChaserController = new Navigator(gameObject);
+            //ballChaserController = new Navigator(gameObject);
+            navigator = new Navigator(gameObject);
         }
 
         private void FixedUpdate()
@@ -113,6 +115,9 @@ namespace UnityStandardAssets.Vehicles.Car
 
             Gizmos.color = Color.cyan;
             Gizmos.DrawSphere(_optimalDefPos, 3);
+            
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawSphere(own_goal.transform.position, 3);
         }
 
         private void Update()
@@ -121,7 +126,15 @@ namespace UnityStandardAssets.Vehicles.Car
             pb.Tick();
         }
 
-         
+        private void OnCollisionEnter(Collision collision)
+        {
+            if (collision.collider is null) return;
+            //Debug.Log(ball.name);
+            if (ball.name != collision.collider.name)
+            {
+                navigator.setToCrash();
+            }
+        }
         //*********************************************************************
         //DEFENCE
         
@@ -178,7 +191,24 @@ namespace UnityStandardAssets.Vehicles.Car
 
         private void goToDefencePos()
         {
-            Move move = goalieController.moveToPosition(_optimalDefPos);
+            Move move = navigator.moveToPosition(_optimalDefPos);
+            float distanceToGoalPos = (transform.position - _optimalDefPos).magnitude;
+            float goalArea = 50f;
+            if (distanceToGoalPos < goalArea)
+            {
+                //move.throttle *= 0.1f;
+                //move.footBrake *= 0.1f;
+                float acc_factor = distanceToGoalPos / goalArea;
+                move.throttle *= acc_factor;
+                move.footBrake *= acc_factor;
+            }
+            if (distanceToGoalPos < 0.5f)
+            {
+                move.throttle = 0f;
+                move.footBrake = 0f;
+                move.handBrake = 1f;
+            }
+                
             m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);
         }
         
@@ -230,7 +260,7 @@ namespace UnityStandardAssets.Vehicles.Car
         void Dribble()
         {
             Vector3 enemyGoalPos = other_goal.transform.position;
-            Move move = ballChaserController.moveToPosition(enemyGoalPos);
+            Move move = navigator.moveToPosition(enemyGoalPos);
             m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);
         }
 
@@ -238,7 +268,7 @@ namespace UnityStandardAssets.Vehicles.Car
         void InterceptBall()
         {
             Vector3 ballPos = ball.transform.position;
-            Move move = ballChaserController.moveToPosition(ballPos);
+            Move move = navigator.moveToPosition(ballPos);
             m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);
         }
         
@@ -260,7 +290,7 @@ namespace UnityStandardAssets.Vehicles.Car
                 }
             }
 
-            Move move = ballChaserController.moveToPosition(closestEnemy.transform.position);
+            Move move = navigator.moveToPosition(closestEnemy.transform.position);
             m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);
         }
         
