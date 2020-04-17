@@ -15,8 +15,7 @@ tree("Defend")
     fallback
         sequence
             AtGoal
-            TakeDefenciveStance
-        GoToOurGoal
+        TakeDefenciveStance
 
 tree("ChaseAndScore")
     fallback
