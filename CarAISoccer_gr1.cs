@@ -7,6 +7,7 @@ using System.Runtime.Remoting.Channels;
 using Panda;
 using Scrips;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using UnityEditor;
 using UnityEngine.Analytics;
 using XNode.Examples.MathNodes;
@@ -78,8 +79,8 @@ namespace UnityStandardAssets.Vehicles.Car
 
             goalie = friends[0];
             //goalieController = new Navigator(goalie);
-            _maxDistanceToGoalGoalie = _defRadius + 2f;
-            _minDistanceToGoalGoalie = _defRadius - 2f;
+            _maxDistanceToGoalGoalie = _defRadius + 5f;
+            _minDistanceToGoalGoalie = _defRadius - 5f;
 
             foreach (var teamMate in friends)
             {
@@ -160,6 +161,15 @@ namespace UnityStandardAssets.Vehicles.Car
         }
 
         [Task]
+        void angleCarForMaximumProtectionOfGoal()
+        {
+            _optimalDefPos = calculateOptimalDefPos();
+            Vector3 finalAttackVector = attackVector();
+            float protectionDot = Vector3.Dot(gameObject.transform.forward, finalAttackVector);
+            
+        }
+        
+        [Task]
         void TakeDefenciveStance()
         {
             _optimalDefPos = calculateOptimalDefPos();
@@ -174,12 +184,19 @@ namespace UnityStandardAssets.Vehicles.Car
 
         private Vector3 calculateOptimalDefPos()
         {
+            Vector3 goal_pos = own_goal.transform.position;
+            Vector3 final_attack_vector = attackVector();
+            return final_attack_vector + goal_pos;
+        }
+
+        private Vector3 attackVector()
+        {
             Vector3 ball_pos = ball.transform.position;
             Vector3 goal_pos = own_goal.transform.position;
             Vector3 attack_vector = ball_pos - goal_pos;
             Vector3 unit_attack_vector = attack_vector / attack_vector.magnitude;
             Vector3 final_attack_vector = unit_attack_vector * _defRadius;
-            return final_attack_vector + goal_pos;
+            return final_attack_vector;
         }
 
         /*[Task]
@@ -194,21 +211,22 @@ namespace UnityStandardAssets.Vehicles.Car
             Move move = navigator.moveToPosition(_optimalDefPos);
             float distanceToGoalPos = (transform.position - _optimalDefPos).magnitude;
             float goalArea = 50f;
-            if (distanceToGoalPos < goalArea)
-            {
-                //move.throttle *= 0.1f;
-                //move.footBrake *= 0.1f;
-                float acc_factor = distanceToGoalPos / goalArea;
-                move.throttle *= acc_factor;
-                move.footBrake *= acc_factor;
-            }
-            if (distanceToGoalPos < 0.5f)
+            float scaleFactor = 0.8f;
+            if (distanceToGoalPos < 2f)
             {
                 move.throttle = 0f;
                 move.footBrake = 0f;
                 move.handBrake = 1f;
             }
-                
+            if (distanceToGoalPos < goalArea)
+            {
+                move.throttle *= scaleFactor;
+                move.footBrake *= scaleFactor;
+                //float acc_factor = distanceToGoalPos / goalArea;
+                //move.throttle *= acc_factor;
+                //move.footBrake *= acc_factor;
+            }
+
             m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);
         }
         

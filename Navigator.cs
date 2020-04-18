@@ -31,10 +31,7 @@ namespace Scrips
                 check_Should_Reverse(current_pos, guard_pos, dir);*/
                 if (stopwatch.ElapsedMilliseconds < 2000)
                 {
-                    Move move = followGoal(guard_pos);
-                    move.throttle *= -1;
-                    move.footBrake *= -1;
-                    return move;
+                    return crashRoutine();
                 }
                 crash = false;
                 stopwatch.Stop();
@@ -44,6 +41,21 @@ namespace Scrips
             return followGoal(guard_pos);
 
         }
+
+        /*public Move alignGoalie(float protectionDot, Vector guardPos)
+        {
+            float steer;
+            if (reversing)
+            {
+                steer = protectionDot > 0f ? 1f : -1f;
+            }
+            else
+            {
+                steer = protectionDot > 0f ? -1f : 1f;
+            }
+            
+            
+        }*/
 
         private Move followGoal(Vector3 guard_pos)
         {

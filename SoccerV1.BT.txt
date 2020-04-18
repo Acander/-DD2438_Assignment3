@@ -5,7 +5,7 @@ tree("version1")
     fallback
         sequence
             IsGoalie
-            tree("Defend")
+            TakeDefenciveStance
         sequence
             ClosestToBall
             tree("ChaseAndScore")
@@ -15,6 +15,7 @@ tree("Defend")
     fallback
         sequence
             AtGoal
+            angleCarForMaximumProtectionOfGoal
         TakeDefenciveStance
 
 tree("ChaseAndScore")
