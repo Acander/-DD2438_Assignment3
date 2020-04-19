@@ -45,9 +45,9 @@ namespace UnityStandardAssets.Vehicles.Car
         private Navigator navigator;
 
         //Goalie parameters
-        private readonly float _defRadius = 15f; //Must be between above bounds
-        private float _maxDistanceToGoalGoalie;
-        private float _minDistanceToGoalGoalie;
+        private int defRadius = 15; //Must be between above bounds
+        private float maxDistanceToGoalGoalie;
+        private float minDistanceToGoalGoalie;
         //private float allowed_def_pos_err = 0.5f;
         private Vector3 _optimalDefPos;
         
@@ -80,8 +80,8 @@ namespace UnityStandardAssets.Vehicles.Car
 
             goalie = friends[0];
             //goalieController = new Navigator(goalie);
-            _maxDistanceToGoalGoalie = _defRadius + 5f;
-            _minDistanceToGoalGoalie = _defRadius - 5f;
+            maxDistanceToGoalGoalie = defRadius + 5f;
+            minDistanceToGoalGoalie = defRadius - 5f;
 
             foreach (var teamMate in friends)
             {
@@ -114,8 +114,12 @@ namespace UnityStandardAssets.Vehicles.Car
             }
             
             //Draw optimal defencive position
-            Gizmos.color = Color.cyan;
-            Gizmos.DrawSphere(_optimalDefPos, 3);
+            if (goalie.name == name)
+            {
+                Gizmos.color = Color.cyan;
+                Gizmos.DrawSphere(_optimalDefPos, 3);
+                Gizmos.DrawWireSphere(own_goal.transform.position, 2*defRadius);
+            }
 
             if (friend_tag == "Blue" && name != goalie.name)
             {
@@ -162,14 +166,7 @@ namespace UnityStandardAssets.Vehicles.Car
             {
                 return true;
             }
-            /*
-            foreach(GameObject enemy in enemies)
-            {
-                if (enemy.name == collision.collider.attachedRigidbody.name)
-                {
-                    return false;
-                }
-            }*/
+            
             return ball.name != collision.collider.attachedRigidbody.name;
         }
         
@@ -194,18 +191,9 @@ namespace UnityStandardAssets.Vehicles.Car
 
         private bool withinGoalMargin(float distance_to_goal)
         {
-            return _maxDistanceToGoalGoalie > distance_to_goal && _minDistanceToGoalGoalie < distance_to_goal;
+            return maxDistanceToGoalGoalie > distance_to_goal && minDistanceToGoalGoalie < distance_to_goal;
         }
 
-        [Task]
-        void angleCarForMaximumProtectionOfGoal()
-        {
-            _optimalDefPos = calculateOptimalDefPos();
-            Vector3 finalAttackVector = attackVector();
-            float protectionDot = Vector3.Dot(gameObject.transform.forward, finalAttackVector);
-            
-        }
-        
         [Task]
         void TakeDefenciveStance()
         {
@@ -226,16 +214,16 @@ namespace UnityStandardAssets.Vehicles.Car
             Vector3 goal_pos = own_goal.transform.position;
             Vector3 attack_vector = ball_pos - goal_pos;
             Vector3 unit_attack_vector = attack_vector / attack_vector.magnitude;
-            Vector3 final_attack_vector = unit_attack_vector * _defRadius;
+            Vector3 final_attack_vector = unit_attack_vector * defRadius;
             return final_attack_vector;
         }
 
-        /*[Task]
-        void GoToOurGoal()
+        [Task]
+        bool ballWithinGoalArea()
         {
-            //_optimalDefPos = calculateOptimalDefPos();
-            //goToDefencePos();
-        }*/
+            float distanceBetweenGoalAndBall = (own_goal.transform.position - ball.transform.position).magnitude;
+            return distanceBetweenGoalAndBall < 2 * defRadius;
+        }
 
         private void goToDefencePos()
         {
@@ -253,9 +241,6 @@ namespace UnityStandardAssets.Vehicles.Car
             {
                 move.throttle *= scaleFactor;
                 move.footBrake *= scaleFactor;
-                //float acc_factor = distanceToGoalPos / goalArea;
-                //move.throttle *= acc_factor;
-                //move.footBrake *= acc_factor;
             }
 
             m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);

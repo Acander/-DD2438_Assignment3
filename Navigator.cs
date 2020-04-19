@@ -15,8 +15,8 @@ namespace Scrips
     {
         //Goalie stays at the goal for the entire game and does turn around 180 degrees, simply reverses and reverses controls.
         private GameObject car;
-        public bool reversing;
-        
+        public bool reverseMode;
+
         public bool crash;
         public Stopwatch stopwatch = new Stopwatch();
         
@@ -29,7 +29,7 @@ namespace Scrips
             state.Append("Navigator state -> ");
             state.AppendFormat("Crashing: {0}, StopWatch: {1}, ", crash, stopwatch.ElapsedMilliseconds);
             state.AppendFormat("AvoidBall: {0}, ", avoidBall);
-            state.AppendFormat("Reversing: {0}, ", reversing);
+            state.AppendFormat("Reversing: {0}, ", reverseMode);
             return state.ToString();
         }
         
@@ -95,7 +95,7 @@ namespace Scrips
         private float variateSteering(Vector3 dir, Vector3 guard_pos, Vector3 current_pos, float steer)
         {
             Vector3 between = guard_pos - current_pos;
-            if (reversing)
+            if (reverseMode)
             {
                 dir *= -1;
             }
@@ -112,7 +112,7 @@ namespace Scrips
         private void check_Should_Reverse(Vector3 currentPos, Vector3 goalPos, Vector3 carHeading)
         {
             float reverseScore = Vector3.Dot(goalPos-currentPos, carHeading);
-            reversing = reverseScore < 0;
+            reverseMode = reverseScore < 0;
         }
         
         private float steer_dir(Vector3 pos, Vector3 right, Vector3 end_pos)
@@ -120,17 +120,17 @@ namespace Scrips
             var dir = end_pos - pos;
             float dot = Vector3.Dot(right, dir);
             
-            if (reversing)
+            if (reverseMode)
             {
-                return dot > 0f ? 1f : -1f;
+                return dot > 0f ? -1f : 1f;
             }
 
-            return dot > 0f ? -1f : 1f;
+            return dot > 0f ? 1f : -1f;
         }
 
         private float acceleration()
         {
-            if (reversing)
+            if (reverseMode)
             {
                 return -1;
             }
@@ -140,7 +140,7 @@ namespace Scrips
 
         private Move crashRoutine()
         {
-            if (reversing)
+            if (reverseMode)
             {
                 return new Move(0, 1, 0, 0);
             }
