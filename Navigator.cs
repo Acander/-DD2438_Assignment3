@@ -1,10 +1,13 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using System.Runtime.Remoting.Channels;
+using System.Text;
 using Panda.Examples.Move;
 using UnityEditor;
 using UnityEngine;
 using UnityStandardAssets.Vehicles.Car;
 using XNode.Examples.MathNodes;
+using Debug = System.Diagnostics.Debug;
 
 namespace Scrips
 {
@@ -12,24 +15,34 @@ namespace Scrips
     {
         //Goalie stays at the goal for the entire game and does turn around 180 degrees, simply reverses and reverses controls.
         private GameObject car;
-        private bool reversing;
+        public bool reversing;
+        
         public bool crash;
-        //private float goalRadius = 2f;
         public Stopwatch stopwatch = new Stopwatch();
+        
+        public bool avoidBall;
+        private float avoidBallAngle = 20f;
 
+        public String getState()
+        {
+            StringBuilder state = new StringBuilder();
+            state.Append("Navigator state -> ");
+            state.AppendFormat("Crashing: {0}, StopWatch: {1}, ", crash, stopwatch.ElapsedMilliseconds);
+            state.AppendFormat("AvoidBall: {0}, ", avoidBall);
+            state.AppendFormat("Reversing: {0}, ", reversing);
+            return state.ToString();
+        }
+        
         public Navigator(GameObject car)
         {
             this.car = car;
         }
 
-        public Move moveToPosition(Vector3 guard_pos)
+        public Move moveToPosition(Vector3 guard_pos, Vector3 ballPos)
         {
             if (crash)
-            {    
-                /*Vector3 current_pos = car.transform.position;
-                Vector3 dir = car.transform.forward;
-                check_Should_Reverse(current_pos, guard_pos, dir);*/
-                if (stopwatch.ElapsedMilliseconds < 2000)
+            {
+                if (stopwatch.ElapsedMilliseconds < 1000)
                 {
                     return crashRoutine();
                 }
@@ -37,25 +50,17 @@ namespace Scrips
                 stopwatch.Stop();
                 stopwatch.Reset();
             }
+            
+            Move move = followGoal(guard_pos);
+            
+            if (avoidBall)
+            {
+                move = checkAvoidBall(move, ballPos, car.transform.position, car.transform.forward);
+            }
 
-            return followGoal(guard_pos);
+            return move;
 
         }
-
-        /*public Move alignGoalie(float protectionDot, Vector guardPos)
-        {
-            float steer;
-            if (reversing)
-            {
-                steer = protectionDot > 0f ? 1f : -1f;
-            }
-            else
-            {
-                steer = protectionDot > 0f ? -1f : 1f;
-            }
-            
-            
-        }*/
 
         private Move followGoal(Vector3 guard_pos)
         {
@@ -66,16 +71,27 @@ namespace Scrips
             float steer = steer_dir(current_pos, right, guard_pos);
             float accel = acceleration();
             float handbrake = 0;
-            /*if ((guard_pos - current_pos).magnitude < goalRadius)
-            {
-                steer = 0;
-                accel = 0;
-                handbrake = 1;
-            }*/
             steer = variateSteering(dir, guard_pos, current_pos, steer);
             return new Move(steer, accel, accel, handbrake);
         }
-
+        
+        private Move checkAvoidBall(Move move, Vector3 ballPos, Vector3 myPos, Vector3 forward)
+        {
+            Vector3 between = ballPos - myPos;
+            float angle = Vector3.Angle(forward, between);
+            float steer = 0.4f;
+            if (-avoidBallAngle < angle && angle < 0f)
+            {
+                steer *= -1; //If should turn left
+                move.steeringAngle = steer;
+            }
+            else if (avoidBallAngle > angle && angle >= 0f)
+            {
+                move.steeringAngle = steer;
+            }
+            return move;
+        }
+        
         private float variateSteering(Vector3 dir, Vector3 guard_pos, Vector3 current_pos, float steer)
         {
             Vector3 between = guard_pos - current_pos;
@@ -84,7 +100,7 @@ namespace Scrips
                 dir *= -1;
             }
             float angle = Vector3.Angle(dir, between);
-            
+
             angle *= angle > 0f ? 1f : -1f;
             float maxAngle = 90f;
             float turningForce = angle / maxAngle;
@@ -97,10 +113,6 @@ namespace Scrips
         {
             float reverseScore = Vector3.Dot(goalPos-currentPos, carHeading);
             reversing = reverseScore < 0;
-            
-            /*Debug.DrawLine(currentPos, goalPos, Color.white);
-            Debug.LogFormat("Reverse score: {0}", reverseScore);
-            Debug.LogFormat("Carheading: {0} ", carHeading);*/
         }
         
         private float steer_dir(Vector3 pos, Vector3 right, Vector3 end_pos)
@@ -138,6 +150,7 @@ namespace Scrips
 
         public void setToCrash()
         {
+            stopwatch.Stop();
             stopwatch.Reset();
             stopwatch.Start();
             crash = true;

@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Runtime.Remoting.Channels;
+using System.Security.Cryptography.X509Certificates;
 using Panda;
 using Scrips;
 using Unity.Collections;
@@ -50,7 +52,9 @@ namespace UnityStandardAssets.Vehicles.Car
         private Vector3 _optimalDefPos;
         
         //Chaser parameters
-        private float _dribblingDistance = 5f;
+        private float kickDistance = 15f;
+        private Vector3 optimalKickPos;
+        private float kickRadius;
 
         private void Start()
         {
@@ -72,10 +76,7 @@ namespace UnityStandardAssets.Vehicles.Car
             friends = GameObject.FindGameObjectsWithTag(friend_tag);
             enemies = GameObject.FindGameObjectsWithTag(enemy_tag);
 
-            //Debug.LogFormat("Friends {0}", friends.Length);
-            //Debug.LogFormat("Enemies {0}", enemies.Length);
-
-            //Debug.Log(friends[1]);
+            kickRadius = kickDistance;
 
             goalie = friends[0];
             //goalieController = new Navigator(goalie);
@@ -113,29 +114,65 @@ namespace UnityStandardAssets.Vehicles.Car
             }
             
             //Draw optimal defencive position
-
             Gizmos.color = Color.cyan;
             Gizmos.DrawSphere(_optimalDefPos, 3);
-            
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawSphere(own_goal.transform.position, 3);
+
+            if (friend_tag == "Blue" && name != goalie.name)
+            {
+                if (ballOnOurSideOfTheField())
+                {
+                    Gizmos.color = Color.white;
+                    Gizmos.DrawSphere(optimalKickPos, 3);
+                    Gizmos.DrawWireSphere(optimalKickPos, kickRadius);
+                }
+                else
+                {
+                    Gizmos.color = Color.red;
+                    Gizmos.DrawSphere(optimalKickPos, 3);
+                    Gizmos.DrawWireSphere(optimalKickPos, kickRadius);
+                }
+            }
         }
 
         private void Update()
         {
             pb.Reset();
             pb.Tick();
+            
+            logCarState();
+        }
+
+        private void logCarState()
+        {
+            Debug.Log(name + " - " + navigator.getState());
         }
 
         private void OnCollisionEnter(Collision collision)
         {
-            if (collision.collider is null) return;
-            //Debug.Log(ball.name);
-            if (ball.name != collision.collider.name)
+            if (shouldReverse(collision))
             {
+                Debug.Log("I have crashed!");
                 navigator.setToCrash();
             }
+            
         }
+        private bool shouldReverse(Collision collision)
+        {
+            if (collision.collider.attachedRigidbody == null)
+            {
+                return true;
+            }
+            /*
+            foreach(GameObject enemy in enemies)
+            {
+                if (enemy.name == collision.collider.attachedRigidbody.name)
+                {
+                    return false;
+                }
+            }*/
+            return ball.name != collision.collider.attachedRigidbody.name;
+        }
+        
         //*********************************************************************
         //DEFENCE
         
@@ -174,12 +211,6 @@ namespace UnityStandardAssets.Vehicles.Car
         {
             _optimalDefPos = calculateOptimalDefPos();
             goToDefencePos();
-            
-            //Vector3 goalie_pos = transform.position;
-            /*if (allowed_def_pos_err < (optimal_def_pos - transform.position).magnitude)
-            {
-                goToDefencePos();
-            }*/
         }
 
         private Vector3 calculateOptimalDefPos()
@@ -208,7 +239,7 @@ namespace UnityStandardAssets.Vehicles.Car
 
         private void goToDefencePos()
         {
-            Move move = navigator.moveToPosition(_optimalDefPos);
+            Move move = navigator.moveToPosition(_optimalDefPos, ball.transform.position);
             float distanceToGoalPos = (transform.position - _optimalDefPos).magnitude;
             float goalArea = 50f;
             float scaleFactor = 0.8f;
@@ -249,7 +280,7 @@ namespace UnityStandardAssets.Vehicles.Car
                 float distanceToBall = this.distanceToBall(teamMate);
                 if (shortestDistance > distanceToBall)
                 {
-                    Debug.Log("Found shorter distance");
+                    //Debug.Log("Found shorter distance");
                     closestPlayer = teamMate;
                     shortestDistance = distanceToBall;
                 }
@@ -262,32 +293,57 @@ namespace UnityStandardAssets.Vehicles.Car
         {
             return teamMate.name == friends[0].name;
         }
-
-        [Task]
-        bool HaveBall()
-        {
-            return _dribblingDistance > distanceToBall(gameObject);
-        }
-
+        
         private float distanceToBall(GameObject teamMate)
         {
             return (teamMate.transform.position - ball.transform.position).magnitude;
         }
 
         [Task]
-        void Dribble()
+        bool BehindBall()
         {
-            Vector3 enemyGoalPos = other_goal.transform.position;
-            Move move = navigator.moveToPosition(enemyGoalPos);
-            m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);
+            SetOptimalKickPosition();
+            float distanceToKickPos = (transform.position - optimalKickPos).magnitude;
+            return distanceToKickPos < kickRadius;
         }
 
         [Task]
+        void KickBall()
+        {
+            Move move = navigator.moveToPosition(ball.transform.position, ball.transform.position);
+            m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);
+        }
+        
+        [Task]
         void InterceptBall()
         {
-            Vector3 ballPos = ball.transform.position;
-            Move move = navigator.moveToPosition(ballPos);
+            navigator.avoidBall = true;
+            Move move = navigator.moveToPosition(optimalKickPos, ball.transform.position);
             m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);
+            navigator.avoidBall = false;
+        }
+        
+        private void SetOptimalKickPosition()
+        {
+            Vector3 ball_pos = ball.transform.position;
+            Vector3 goal_pos = other_goal.transform.position;
+            Vector3 attack_vector = ball_pos - goal_pos;
+            if (ballOnOurSideOfTheField())
+            {
+                ball_pos = ball.transform.position;
+                goal_pos = own_goal.transform.position;
+                attack_vector = goal_pos - ball_pos;
+            }
+
+            Vector3 unit_attack_vector = attack_vector / attack_vector.magnitude;
+            Vector3 final_attack_vector = unit_attack_vector * kickDistance;
+            optimalKickPos = final_attack_vector + ball_pos;
+            
+        }
+
+        private bool ballOnOurSideOfTheField()
+        {
+            return distanceToBall(other_goal) > distanceToBall(own_goal);
         }
         
         //***************************************************************************
@@ -296,25 +352,25 @@ namespace UnityStandardAssets.Vehicles.Car
         [Task]
         void RamEnemyGoalie()
         {
-            GameObject closestEnemy = enemies[0];
+            GameObject goalie = enemies[0];
             float shortestDistance = float.PositiveInfinity;
             foreach (var enemy in enemies)
             {
-                float distanceToEnemy = this.distanceToEnemy(enemy);
-                if (shortestDistance > distanceToEnemy)
+                float distanceToGoal = this.distanceToEnemyGoal(enemy);
+                if (shortestDistance > distanceToGoal)
                 {
-                    closestEnemy = enemy;
-                    shortestDistance = distanceToEnemy;
+                    goalie = enemy;
+                    shortestDistance = distanceToGoal;
                 }
             }
 
-            Move move = navigator.moveToPosition(closestEnemy.transform.position);
+            Move move = navigator.moveToPosition(goalie.transform.position, ball.transform.position);
             m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);
         }
         
-        private float distanceToEnemy(GameObject enemy)
+        private float distanceToEnemyGoal(GameObject enemy)
         {
-            return (transform.position - enemy.transform.position).magnitude;
+            return (other_goal.transform.position - enemy.transform.position).magnitude;
         }
     }
 }

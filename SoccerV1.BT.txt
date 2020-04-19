@@ -20,7 +20,7 @@ tree("Defend")
 
 tree("ChaseAndScore")
     fallback
-        sequence
-            HaveBall
-            Dribble
-        InterceptBall
+         sequence
+             BehindBall
+             KickBall
+         InterceptBall
