@@ -9,7 +9,7 @@ tree("version1")
         sequence
             ClosestToBall
             tree("ChaseAndScore")
-        RamEnemyGoalie
+        tree("Destroy")
 
 tree("Defend")
     fallback
@@ -24,3 +24,10 @@ tree("ChaseAndScore")
              BehindBall
              KickBall
          InterceptBall
+         
+tree("Destroy")
+    fallback
+        sequence
+            BetweenBallAndEnemyChaser
+            RamEnemyChaser
+        InterceptEnemyChaser
