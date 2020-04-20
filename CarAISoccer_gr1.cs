@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Runtime.Remoting.Channels;
@@ -37,18 +38,14 @@ namespace UnityStandardAssets.Vehicles.Car
         
         //Team Members
         private GameObject goalie;
-        //private Navigator goalieController;
-        //private GameObject ballChaser;
-        //private Navigator ballChaserController;
-        private List<GameObject> chasers = new List<GameObject>();
-        //private List<GoalieController> chaserControllers;
+        private GameObject chaser;
+        private GameObject destroyer;
         private Navigator navigator;
 
         //Goalie parameters
-        private int defRadius = 15; //Must be between above bounds
+        private int defRadius = 15;
         private float maxDistanceToGoalGoalie;
         private float minDistanceToGoalGoalie;
-        //private float allowed_def_pos_err = 0.5f;
         private Vector3 _optimalDefPos;
         
         //Chaser parameters
@@ -79,18 +76,12 @@ namespace UnityStandardAssets.Vehicles.Car
             kickRadius = kickDistance;
 
             goalie = friends[0];
-            //goalieController = new Navigator(goalie);
+            chaser = friends[1];
+            destroyer = friends[2];
+            
             maxDistanceToGoalGoalie = defRadius + 5f;
             minDistanceToGoalGoalie = defRadius - 5f;
-
-            foreach (var teamMate in friends)
-            {
-                if (isGoalie(teamMate))
-                    continue;
-                chasers.Add(teamMate);
-                //chaserControllers.Add(new GoalieController(teamMate));
-            }
-            //ballChaserController = new Navigator(gameObject);
+            
             navigator = new Navigator(gameObject);
         }
 
@@ -112,13 +103,16 @@ namespace UnityStandardAssets.Vehicles.Car
                 Gizmos.color = Color.red;
                 Gizmos.DrawSphere(transform.position, 2);
             }
-            
+
             //Draw optimal defencive position
             if (goalie.name == name)
             {
                 Gizmos.color = Color.cyan;
                 Gizmos.DrawSphere(_optimalDefPos, 3);
                 Gizmos.DrawWireSphere(own_goal.transform.position, 2*defRadius);
+                
+                Gizmos.color = Color.yellow;
+                Gizmos.DrawSphere(transform.position, 2);
             }
 
             if (friend_tag == "Blue" && name != goalie.name)
@@ -176,7 +170,10 @@ namespace UnityStandardAssets.Vehicles.Car
         [Task]
         bool IsGoalie()
         {
-            return goalie.name == gameObject.name;
+            
+            GameObject closestCar = findClosestCar(friends, own_goal);
+            goalie = closestCar;
+            return goalie.name == name;
         }
 
         [Task]
@@ -228,6 +225,7 @@ namespace UnityStandardAssets.Vehicles.Car
         private void goToDefencePos()
         {
             Move move = navigator.moveToPosition(_optimalDefPos, ball.transform.position);
+            Debug.DrawLine(_optimalDefPos, transform.position);
             float distanceToGoalPos = (transform.position - _optimalDefPos).magnitude;
             float goalArea = 50f;
             float scaleFactor = 0.8f;
@@ -252,20 +250,28 @@ namespace UnityStandardAssets.Vehicles.Car
         [Task]
         bool ClosestToBall()
         {
-            GameObject closestPlayer = findClosestCar(chasers);
-            return closestPlayer.name == gameObject.name;
+            List<GameObject> potentialChasers = new List<GameObject>();
+            foreach(GameObject teamMate in friends)
+            {
+                if(teamMate.name != goalie.name)
+                    potentialChasers.Add(teamMate);
+            }
+            GameObject closestPlayer = findClosestCar(potentialChasers.ToArray(), ball);
+            chaser = closestPlayer;
+            potentialChasers.Remove(closestPlayer);
+            destroyer = potentialChasers[0];
+            return chaser.name == gameObject.name;
         }
         
-        private GameObject findClosestCar(List<GameObject> players)
+        private GameObject findClosestCar(GameObject[] players, GameObject something)
         {
             GameObject closestPlayer = gameObject;
             float shortestDistance = float.PositiveInfinity;
             foreach (var teamMate in players)
             {
-                float distanceToBall = this.distanceToBall(teamMate);
+                float distanceToBall = distanceToObject(teamMate, something);
                 if (shortestDistance > distanceToBall)
                 {
-                    //Debug.Log("Found shorter distance");
                     closestPlayer = teamMate;
                     shortestDistance = distanceToBall;
                 }
@@ -279,9 +285,9 @@ namespace UnityStandardAssets.Vehicles.Car
             return teamMate.name == friends[0].name;
         }
         
-        private float distanceToBall(GameObject teamMate)
+        private float distanceToObject(GameObject teamMate, GameObject something)
         {
-            return (teamMate.transform.position - ball.transform.position).magnitude;
+            return (teamMate.transform.position - something.transform.position).magnitude;
         }
 
         [Task]
@@ -296,6 +302,7 @@ namespace UnityStandardAssets.Vehicles.Car
         void KickBall()
         {
             Move move = navigator.moveToPosition(ball.transform.position, ball.transform.position);
+            Debug.DrawLine(ball.transform.position, transform.position);
             m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);
         }
         
@@ -304,6 +311,7 @@ namespace UnityStandardAssets.Vehicles.Car
         {
             navigator.avoidBall = true;
             Move move = navigator.moveToPosition(optimalKickPos, ball.transform.position);
+            Debug.DrawLine(optimalKickPos, transform.position);
             m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);
             navigator.avoidBall = false;
         }
@@ -328,7 +336,7 @@ namespace UnityStandardAssets.Vehicles.Car
 
         private bool ballOnOurSideOfTheField()
         {
-            return distanceToBall(other_goal) > distanceToBall(own_goal);
+            return distanceToObject(other_goal, ball) > distanceToObject(own_goal, ball);
         }
         
         //***************************************************************************
@@ -341,7 +349,7 @@ namespace UnityStandardAssets.Vehicles.Car
             float shortestDistance = float.PositiveInfinity;
             foreach (var enemy in enemies)
             {
-                float distanceToGoal = this.distanceToEnemyGoal(enemy);
+                float distanceToGoal = distanceToEnemyGoal(enemy);
                 if (shortestDistance > distanceToGoal)
                 {
                     goalie = enemy;
@@ -350,6 +358,7 @@ namespace UnityStandardAssets.Vehicles.Car
             }
 
             Move move = navigator.moveToPosition(goalie.transform.position, ball.transform.position);
+            Debug.DrawLine(goalie.transform.position, transform.position);
             m_Car.Move(move.steeringAngle, move.throttle, move.footBrake, move.handBrake);
         }
         

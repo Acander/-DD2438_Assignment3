@@ -21,7 +21,7 @@ namespace Scrips
         public Stopwatch stopwatch = new Stopwatch();
         
         public bool avoidBall;
-        private float avoidBallAngle = 20f;
+        private float avoidBallAngle = 30f;
 
         public String getState()
         {
@@ -42,7 +42,7 @@ namespace Scrips
         {
             if (crash)
             {
-                if (stopwatch.ElapsedMilliseconds < 1000)
+                if (stopwatch.ElapsedMilliseconds < 2000)
                 {
                     return crashRoutine();
                 }
@@ -52,7 +52,7 @@ namespace Scrips
             }
             
             Move move = followGoal(guard_pos);
-            
+
             if (avoidBall)
             {
                 move = checkAvoidBall(move, ballPos, car.transform.position, car.transform.forward);
@@ -67,6 +67,7 @@ namespace Scrips
             Vector3 current_pos = car.transform.position;
             Vector3 dir = car.transform.forward;
             Vector3 right = car.transform.right;
+            float magnitude = (current_pos - guard_pos).magnitude;
             check_Should_Reverse(current_pos, guard_pos, dir);
             float steer = steer_dir(current_pos, right, guard_pos);
             float accel = acceleration();
@@ -82,11 +83,12 @@ namespace Scrips
             float steer = 0.4f;
             if (-avoidBallAngle < angle && angle < 0f)
             {
-                steer *= -1; //If should turn left
+                //steer *= -1; //If should turn left
                 move.steeringAngle = steer;
             }
             else if (avoidBallAngle > angle && angle >= 0f)
             {
+                steer *= -1; //If should turn left
                 move.steeringAngle = steer;
             }
             return move;
@@ -120,10 +122,10 @@ namespace Scrips
             var dir = end_pos - pos;
             float dot = Vector3.Dot(right, dir);
             
-            if (reverseMode)
+            /*if (reverseMode)
             {
-                return dot > 0f ? -1f : 1f;
-            }
+                return dot > 0f ? 1f : -1f;
+            }*/
 
             return dot > 0f ? 1f : -1f;
         }
